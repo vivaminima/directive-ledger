@@ -1,0 +1,19 @@
+{
+  "name": "directive-ledger",
+  "version": "1.1.0",
+  "description": "Keep your AI coding decisions in an append-only log, and see what you typed that never reached it. One Python file, offline.",
+  "author": {
+    "name": "Vivaminima",
+    "url": "https://github.com/vivaminima"
+  },
+  "homepage": "https://vivastory4.gumroad.com/l/backlog-os",
+  "repository": "https://github.com/vivaminima/directive-ledger",
+  "license": "MIT",
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "cli",
+    "decisions",
+    "memory"
+  ]
+}
