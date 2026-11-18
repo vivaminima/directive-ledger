@@ -1,0 +1,15 @@
+$ python ledger.py missing --transcript examples/transcript_example.jsonl --utc --path examples/ledger.jsonl
+# Typed words that are not in the ledger - transcript_example.jsonl
+
+Candidates only. Nothing was added to the ledger: a person decides which of these are instructions.
+Times are UTC. Each line is the first 120 characters.
+
+- 2026-03-19 09:15  Use the blue logo on the download page, not the green one.
+- 2026-03-19 10:05  Price stays at $19 until the end of April.
+- 2026-03-19 11:20  Never email the whole list twice in one week.
+- 2026-03-19 13:07  The installer must work offline.
+- 2026-03-19 14:30  Ask me before you delete any customer file.
++1 more. Backlog OS shows the full list, turns each decision into a card, and keeps handoff notes: https://vivastory4.gumroad.com/l/backlog-os
+
+lines skipped (could not be read): 1
+typed by a person 8 · in the ledger 2 · candidates 6

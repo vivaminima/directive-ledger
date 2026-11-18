@@ -1,0 +1,19 @@
+{"type": "user", "timestamp": "2026-03-19T09:02:10.000Z", "message": {"role": "user", "content": "Ship the Windows build first."}}
+{"type": "assistant", "timestamp": "2026-03-19T09:02:31.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
+{"type": "user", "isMeta": true, "timestamp": "2026-03-19T09:02:40.000Z", "message": {"role": "user", "content": "<command-name>/status</command-name>"}}
+{"type": "user", "timestamp": "2026-03-19T09:03:05.000Z", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "build log: 0 errors"}]}}
+{"type": "user", "timestamp": "2026-03-19T09:15:44.000Z", "message": {"role": "user", "content": "Use the blue logo on the download page, not the green one."}}
+{"type": "assistant", "timestamp": "2026-03-19T09:16:02.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
+{"type": "user", "timestamp": "2026-03-19T10:05:12.000Z", "message": {"role": "user", "content": [{"type": "text", "text": "Price stays at $19 until the end of April."}, {"type": "text", "text": "<system-reminder>The task list is empty.</system-reminder>"}]}}
+{"type": "assistant", "timestamp": "2026-03-19T10:05:40.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
+{"type": "user", "timestamp": "2026-03-19T10:40:00.000Z", "message": {"role": "user", "content": "no paid ads this month"}}
+{"type": "assistant", "timestamp": "2026-03-19T10:40:21.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
+{"type": "user", "timestamp": "2026-03-19T11:20:03.000Z", "message": {"role": "user", "content": "Never email the whole list twice in one week."}}
+{"type": "assistant", "timestamp": "2026-03-19T11:20:30.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
+{"type": "user", "timestamp": "2026-03-19T13:07:26.000Z", "message": {"role": "user", "content": "The installer must work offline."}}
+{"type": "assistant", "timestamp": "2026-03-19T13:07:51.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
+{"type": "user", "timestamp": "2026-03-19T14:30:09.000Z", "message": {"role": "user", "content": "Ask me before you delete any customer file."}}
+{"type": "assistant", "timestamp": "2026-03-19T14:30:33.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
+{"type": "user", "timestamp": "2026-03-19T15:10:00.000Z", "message": {"role": "user", "content": "this line was cut o
+{"type": "user", "timestamp": "2026-03-19T16:45:18.000Z", "message": {"role": "user", "content": "Move the launch to April 2 and update the changelog."}}
+{"type": "assistant", "timestamp": "2026-03-19T16:45:40.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "(reply)"}]}}
