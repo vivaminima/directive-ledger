@@ -7,17 +7,37 @@ Each line of the ledger is one JSON object. It carries the hash of the previous
 line, so editing or deleting any earlier line breaks the chain and `verify` says where.
 A small ".head" file next to the ledger remembers the line count and last hash,
 which also catches a deleted last line.
+
+`missing` reads a conversation transcript (read only) and lists what a person typed
+that is not in the ledger. It lists candidates and never adds them.
 """
 import argparse
 import datetime
+import difflib
 import hashlib
 import json
 import os
 import re
 import sys
+import unicodedata
+
+__version__ = "1.1.0"
 
 DEFAULT_PATH = os.path.join(".", "ledger", "ledger.jsonl")
 WHEN_RE = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}")
+
+# -- conversation transcripts (read only) --------------------------------------------------
+# A transcript is the .jsonl file a coding session keeps of one conversation: one JSON object
+# per line. Nothing here writes to it. A line that cannot be read is skipped and counted.
+# These rules match `ledger missing` in Backlog OS 1.1.0, so both tools find the same lines.
+HARNESS_STARTS = ("<", "[Request interrupted", "[Backlog", "[card reminder]", "Caveat:",
+                  "This session is being continued")
+HARNESS_BLOCK = re.compile(r"<(system-reminder|user-prompt-submit-hook)>.*?</\1>", re.DOTALL)
+SIMILAR, CANDIDATE_WIDTH = 0.85, 120
+FREE_LIMIT = 5
+FULL_URL = "https://vivastory4.gumroad.com/l/backlog-os"
+MORE_LINE = ("+%d more. Backlog OS shows the full list, turns each decision into a card, "
+             "and keeps handoff notes: " + FULL_URL)
 
 
 class LedgerError(Exception):
@@ -114,6 +134,133 @@ def one_line(record, width=70):
     return "%s  %s  %s: %s" % (record["id"], record["when"], record["who"], text)
 
 
+def transcript_lines(path):
+    """One dict per line of a transcript. None stands for a line that could not be read."""
+    with open(path, "rb") as handle:
+        for raw in handle:
+            line = raw.decode("utf-8", "replace").strip().lstrip("﻿")
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                record = None
+            yield record if isinstance(record, dict) else None
+
+
+def transcript_time(stamp, utc=False):
+    """A transcript timestamp as local time (or UTC). None when it cannot be read."""
+    try:
+        when = datetime.datetime.fromisoformat(str(stamp).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        return when
+    try:
+        return (when.astimezone(datetime.timezone.utc) if utc else when.astimezone()).replace(tzinfo=None)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def typed_text(record):
+    """The words a person typed on this line, or "" when the line is something else: a tool result,
+    a line the program wrote for itself (meta), a summary, a sub-task, a hook's text, or anything
+    that starts with "<"."""
+    kind = record.get("type")
+    if kind == "queue-operation":      # typed while the session was busy
+        content = record.get("content") if record.get("operation") == "enqueue" else None
+    elif kind == "user" and not (record.get("isMeta") or record.get("isSidechain") or record.get("isCompactSummary")):
+        message = record.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+    else:
+        return ""
+    if isinstance(content, str):
+        parts = [content]
+    elif isinstance(content, list):
+        if any(isinstance(part, dict) and part.get("type") == "tool_result" for part in content):
+            return ""
+        parts = [part["text"] for part in content
+                 if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str)]
+    else:
+        return ""
+    kept = []
+    for part in parts:
+        part = HARNESS_BLOCK.sub("", part).strip()
+        if part and not part.startswith(HARNESS_STARTS):
+            kept.append(part)
+    return "\n".join(kept)
+
+
+def flat(text):
+    """Text for comparing: no spaces, no punctuation, case ignored. Letters, digits and emoji stay."""
+    return "".join(ch for ch in unicodedata.normalize("NFC", text).casefold()
+                   if not ch.isspace() and unicodedata.category(ch)[0] not in "PZC"
+                   and unicodedata.category(ch) not in ("Sm", "Sk"))
+
+
+def in_ledger(words, ledger_texts):
+    """True when the flattened words sit inside one ledger text, or are at least 85% similar to one."""
+    if any(words in text for text in ledger_texts):
+        return True
+    for text in ledger_texts:
+        matcher = difflib.SequenceMatcher(None, words, text, autojunk=False)
+        if matcher.real_quick_ratio() >= SIMILAR and matcher.quick_ratio() >= SIMILAR and matcher.ratio() >= SIMILAR:
+            return True
+    return False
+
+
+def find_missing(path, transcript, since=None, utc=False):
+    """Compare what a person typed in a transcript with the ledger. Returns the report data; writes nothing."""
+    if since is not None and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", since):
+        raise LedgerError("--since is a date like 2026-03-02.")
+    if not os.path.isfile(transcript):
+        raise LedgerError("transcript not found: %s" % os.path.basename(transcript))
+    records = check(path)
+    typed, queued, skipped = [], [], 0
+    for record in transcript_lines(transcript):
+        if record is None:
+            skipped += 1
+            continue
+        text = typed_text(record)
+        words = flat(text)
+        if not words:
+            continue
+        when = transcript_time(record.get("timestamp"), utc)
+        if since and when is not None and when.strftime("%Y-%m-%d") < since:
+            continue
+        (queued if record.get("type") == "queue-operation" else typed).append((when, text, words))
+    seen = set(words for _when, _text, words in typed)
+    for item in queued:                # a queued line usually shows up again as a normal line: count it once
+        if item[2] not in seen:
+            seen.add(item[2])
+            typed.append(item)
+    typed.sort(key=lambda item: (item[0] is None, item[0] or datetime.datetime.min))
+    ledger_texts = [flat(str(entry.get("text", ""))) for entry in records]
+    candidates = [(when, text) for when, text, words in typed if not in_ledger(words, ledger_texts)]
+    return {"typed": len(typed), "found": len(typed) - len(candidates), "candidates": candidates, "skipped": skipped}
+
+
+def missing_report(data, transcript, since=None, utc=False):
+    """The report text. This free tool shows the first FREE_LIMIT candidates and says how many more there are."""
+    out = ["# Typed words that are not in the ledger - %s" % os.path.basename(transcript), "",
+           "Candidates only. Nothing was added to the ledger: a person decides which of these are instructions.",
+           "Times are %s%s. Each line is the first %d characters."
+           % ("UTC" if utc else "local time", ", from %s on" % since if since else "", CANDIDATE_WIDTH), ""]
+    for when, text in data["candidates"][:FREE_LIMIT]:
+        text = " ".join(text.split())
+        out.append("- %s  %s" % (when.strftime("%Y-%m-%d %H:%M") if when else "(no time)     ",
+                                 text if len(text) <= CANDIDATE_WIDTH else text[:CANDIDATE_WIDTH - 1] + "…"))
+    if not data["candidates"]:
+        out.append("- none")
+    more = len(data["candidates"]) - FREE_LIMIT
+    if more > 0:
+        out.append(MORE_LINE % more)
+    out += ["", "lines skipped (could not be read): %d" % data["skipped"],
+            "typed by a person %d · in the ledger %d · candidates %d"
+            % (data["typed"], data["found"], len(data["candidates"]))]
+    return "\n".join(out) + "\n"
+
+
 def safe_stdio():
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -174,10 +321,22 @@ def cmd_list(args):
     return 0
 
 
+def cmd_missing(args):
+    data = find_missing(args.path, args.transcript, args.since, args.utc)
+    text = missing_report(data, args.transcript, args.since, args.utc)
+    if args.out:
+        out = os.path.abspath(args.out)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        write_atomic(out, text)
+    sys.stdout.write(text)
+    return 0
+
+
 def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--path", default=DEFAULT_PATH, help="ledger file (default: ./ledger/ledger.jsonl)")
     parser = argparse.ArgumentParser(prog="ledger.py", description="Append-only, tamper-evident log of owner decisions.")
+    parser.add_argument("--version", action="version", version="directive-ledger " + __version__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", parents=[common], help="create an empty ledger").set_defaults(func=cmd_init)
     add = sub.add_parser("add", parents=[common], help="append one directive")
@@ -193,6 +352,14 @@ def build_parser():
     lst = sub.add_parser("list", parents=[common], help="one line per directive")
     lst.add_argument("--last", type=int, help="only the last N")
     lst.set_defaults(func=cmd_list)
+    missing = sub.add_parser("missing", parents=[common],
+                             help="list what a person typed in a transcript that is not in the ledger "
+                                  "(candidates only; nothing is added)")
+    missing.add_argument("--transcript", required=True, help="the conversation's .jsonl file (read only)")
+    missing.add_argument("--since", help="only words typed on or after this date: 2026-03-02")
+    missing.add_argument("--out", help="also write the list to this Markdown file")
+    missing.add_argument("--utc", action="store_true", help="show times in UTC instead of local time")
+    missing.set_defaults(func=cmd_missing)
     return parser
 
 
